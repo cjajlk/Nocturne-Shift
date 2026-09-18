@@ -5,8 +5,8 @@
   const ROWS = 20;
   const SCORE_TABLE = Object.freeze([0, 100, 300, 600, 1000]);
   const COLORS = Object.freeze({
-    I: "#58dcff", J: "#527bff", L: "#ffad55", O: "#ffe369",
-    S: "#66e6a1", T: "#b878ff", Z: "#ff668c"
+    I: "#79dced", J: "#648cf0", L: "#8993ed", O: "#b4e7f2",
+    S: "#79dced", T: "#b18ae8", Z: "#8993ed"
   });
   const SHAPES = Object.freeze({
     I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
@@ -49,6 +49,23 @@
   let dropAccumulator = 0;
   let bag = [];
   let touch = null;
+  // Cosmetic snapshots only: never delay locking, clearing or spawning.
+  let visualEffects = [];
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function captureVisualEffects() {
+    const now = performance.now();
+    const fullRows = grid.map((row, y) => row.every(Boolean) ? y : -1).filter(y => y >= 0);
+    const cells = [];
+    active.matrix.forEach((row, y) => row.forEach((value, x) => {
+      const boardY = active.y + y;
+      if (value && boardY >= 0 && !fullRows.includes(boardY)) {
+        cells.push({ x: active.x + x, y: boardY + fullRows.filter(line => line > boardY).length });
+      }
+    }));
+    visualEffects = visualEffects.filter(effect => now - effect.at < 280).slice(-7);
+    visualEffects.push({ at: now, cells, rows: fullRows });
+  }
 
   function emptyGrid() {
     return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
@@ -171,6 +188,7 @@
       endGame();
       return;
     }
+    captureVisualEffects();
     clearLines();
     spawn();
   }
@@ -217,6 +235,7 @@
   }
 
   function resetGame() {
+    visualEffects = [];
     grid = emptyGrid();
     score = 0;
     totalLines = 0;
@@ -254,22 +273,96 @@
     bestNode.textContent = String(bestScore);
   }
 
-  function drawCell(ctx, x, y, size, type) {
+  function drawCell(ctx, x, y, size, type, luminous = false, danger = 0) {
     const pad = Math.max(1.4, size * 0.08);
+    const left = x * size + pad, top = y * size + pad, width = size - pad * 2;
+    ctx.save();
+    ctx.fillStyle = luminous ? "#16233b" : "#0d1427";
+    ctx.fillRect(left, top, width, width);
+    ctx.strokeStyle = COLORS[type];
+    ctx.lineWidth = luminous ? 1.4 : 1;
+    ctx.globalAlpha = luminous ? 0.95 : 0.62;
+    ctx.strokeRect(left, top, width, width);
+    ctx.globalAlpha = luminous ? 0.22 : 0.10;
     ctx.fillStyle = COLORS[type];
-    ctx.fillRect(x * size + pad, y * size + pad, size - pad * 2, size - pad * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.22)";
-    ctx.fillRect(x * size + pad * 1.5, y * size + pad * 1.5, size - pad * 3, Math.max(1, size * 0.08));
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    ctx.strokeRect(x * size + pad, y * size + pad, size - pad * 2, size - pad * 2);
+    ctx.beginPath();
+    ctx.moveTo(left, top); ctx.lineTo(left + width, top);
+    ctx.lineTo(left + width * 0.64, top + width * 0.36);
+    ctx.lineTo(left, top + width * 0.62); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.22 + danger * 0.5;
+    ctx.strokeStyle = danger ? "#cf79c5" : COLORS[type];
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(left + width * 0.65, top + width * 0.12);
+    ctx.lineTo(left + width * 0.46, top + width * 0.43);
+    ctx.lineTo(left + width * 0.58, top + width * 0.62);
+    ctx.lineTo(left + width * 0.3, top + width * 0.88);
+    ctx.moveTo(left + width * 0.46, top + width * 0.43);
+    ctx.lineTo(left + width * 0.24, top + width * 0.38);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // The background is rasterized once; no blur, particles or permanent animation.
+  const backdrop = document.createElement("canvas");
+  backdrop.width = boardCanvas.width;
+  backdrop.height = boardCanvas.height;
+  const backdropCtx = backdrop.getContext("2d");
+  backdropCtx.fillStyle = "#070b19";
+  backdropCtx.fillRect(0, 0, 300, 600);
+  const mist = backdropCtx.createRadialGradient(153, 305, 8, 150, 300, 220);
+  mist.addColorStop(0, "#1b1836"); mist.addColorStop(1, "#070b19");
+  backdropCtx.fillStyle = mist;
+  backdropCtx.fillRect(0, 0, 300, 600);
+  backdropCtx.beginPath();
+  backdropCtx.moveTo(166, 100); backdropCtx.lineTo(139, 237);
+  backdropCtx.lineTo(157, 280); backdropCtx.lineTo(130, 407);
+  backdropCtx.lineTo(144, 504); backdropCtx.lineTo(171, 351);
+  backdropCtx.lineTo(159, 302); backdropCtx.lineTo(176, 207);
+  backdropCtx.closePath();
+  backdropCtx.fillStyle = "#080c1c"; backdropCtx.fill();
+  backdropCtx.strokeStyle = "rgba(145,112,212,0.2)"; backdropCtx.stroke();
+  backdropCtx.beginPath(); backdropCtx.moveTo(157, 280);
+  backdropCtx.lineTo(130, 407); backdropCtx.lineTo(144, 504);
+  backdropCtx.strokeStyle = "rgba(105,207,225,0.15)"; backdropCtx.stroke();
+
+  function drawVisualEffects(cell) {
+    const now = performance.now();
+    const duration = reducedMotion.matches ? 100 : 280;
+    visualEffects = visualEffects.filter(effect => now - effect.at < duration);
+    boardCtx.save();
+    for (const effect of visualEffects) {
+      const progress = (now - effect.at) / duration;
+      boardCtx.strokeStyle = "#c4f3ff";
+      boardCtx.lineWidth = 1.5;
+      boardCtx.globalAlpha = Math.max(0, 1 - progress * 1.6) * 0.8;
+      for (const point of effect.cells) {
+        boardCtx.strokeRect(point.x * cell + 2, point.y * cell + 2, cell - 4, cell - 4);
+      }
+      for (const y of effect.rows) {
+        boardCtx.globalAlpha = (1 - progress) * 0.38;
+        boardCtx.fillStyle = "#a7dceb";
+        boardCtx.fillRect(0, y * cell + 2, boardCanvas.width, cell - 4);
+        if (progress > 0.2) {
+          boardCtx.globalAlpha = (1 - progress) * 0.8;
+          boardCtx.beginPath();
+          for (let x = 0; x < COLS; x += 1) {
+            boardCtx.moveTo(x * cell + 2, y * cell + cell * 0.3);
+            boardCtx.lineTo(x * cell + cell * 0.55, y * cell + cell * 0.6);
+            boardCtx.lineTo(x * cell + cell * 0.8, y * cell + cell * 0.4);
+          }
+          boardCtx.stroke();
+        }
+      }
+    }
+    boardCtx.restore();
   }
 
   function drawBoard() {
     const cell = boardCanvas.width / COLS;
     boardCtx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
-    boardCtx.fillStyle = "#070a1b";
-    boardCtx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
-    boardCtx.strokeStyle = "rgba(104,124,214,0.105)";
+    boardCtx.drawImage(backdrop, 0, 0);
+    boardCtx.strokeStyle = "rgba(104,124,214,0.065)";
     boardCtx.lineWidth = 1;
     for (let x = 0; x <= COLS; x += 1) {
       boardCtx.beginPath();
@@ -283,13 +376,34 @@
       boardCtx.lineTo(boardCanvas.width, y * cell);
       boardCtx.stroke();
     }
+    const highest = grid.findIndex(row => row.some(Boolean));
+    const tension = highest < 0 ? 0 : Math.max(0, (7 - highest) / 7);
+    if (tension > 0) {
+      boardCtx.fillStyle = `rgba(155,76,170,${tension * 0.08})`;
+      boardCtx.fillRect(0, 0, boardCanvas.width, cell * 7);
+      boardCtx.strokeStyle = `rgba(207,121,197,${tension * 0.65})`;
+      boardCtx.strokeRect(1, 1, boardCanvas.width - 2, cell * 7);
+    }
     grid.forEach((row, y) => row.forEach((type, x) => {
-      if (type) drawCell(boardCtx, x, y, cell, type);
+      if (type) drawCell(boardCtx, x, y, cell, type, false, y < 7 ? tension * (7 - y) / 7 : 0);
     }));
+    drawVisualEffects(cell);
     if (!active || gameOver) return;
+    let ghostOffset = 0;
+    while (!collides(active, 0, ghostOffset + 1)) ghostOffset += 1;
+    boardCtx.save();
+    boardCtx.strokeStyle = "rgba(164,220,239,0.28)";
+    boardCtx.lineWidth = 1;
+    active.matrix.forEach((row, y) => row.forEach((value, x) => {
+      const ghostY = active.y + y + ghostOffset;
+      if (value && ghostY >= 0 && ghostOffset > 0) {
+        boardCtx.strokeRect((active.x + x) * cell + 3, ghostY * cell + 3, cell - 6, cell - 6);
+      }
+    }));
+    boardCtx.restore();
     active.matrix.forEach((row, y) => row.forEach((value, x) => {
       const boardY = active.y + y;
-      if (value && boardY >= 0) drawCell(boardCtx, active.x + x, boardY, cell, active.type);
+      if (value && boardY >= 0) drawCell(boardCtx, active.x + x, boardY, cell, active.type, true);
     }));
   }
 
@@ -308,7 +422,7 @@
       if (!value) return;
       const px = startX / size + (x - cols[0]);
       const py = startY / size + (y - rows[0]);
-      drawCell(ctx, px, py, size, type);
+      drawCell(ctx, px, py, size, type, true);
     }));
   }
 
