@@ -1,0 +1,209 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ink: #f3f5ff;
+  --muted: #9ca7cf;
+  --panel: rgba(18, 22, 54, 0.86);
+  --line: rgba(116, 137, 255, 0.26);
+  --cyan: #55ddff;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #070816;
+  color: var(--ink);
+  overscroll-behavior: none;
+}
+
+body {
+  min-height: 100dvh;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(76, 72, 205, 0.24), transparent 34%),
+    radial-gradient(circle at 85% 78%, rgba(74, 28, 138, 0.25), transparent 38%),
+    linear-gradient(160deg, #08091a 0%, #0c102a 55%, #090719 100%);
+}
+
+button,
+canvas { -webkit-tap-highlight-color: transparent; }
+
+.game-shell {
+  width: min(100vw, 56.25dvh);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.game-header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--cyan);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.25rem, 6vw, 1.8rem);
+  line-height: 1;
+  letter-spacing: 0.12em;
+}
+
+.score-panel,
+.mini-panel,
+.stats {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: inset 0 0 18px rgba(62, 80, 170, 0.12), 0 8px 26px rgba(0, 0, 0, 0.2);
+}
+
+.score-panel {
+  min-width: 112px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  display: grid;
+  text-align: right;
+}
+
+.score-panel span,
+.mini-panel > span,
+.stats dt {
+  color: var(--muted);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
+.score-panel strong { font-size: 1.15rem; }
+
+.game-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 9px;
+  align-items: center;
+}
+
+.board-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 2;
+  max-height: calc(100dvh - 132px);
+  justify-self: center;
+  border: 1px solid rgba(105, 134, 255, 0.5);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(4, 6, 18, 0.9);
+  box-shadow: 0 0 28px rgba(91, 77, 220, 0.18), inset 0 0 20px rgba(29, 44, 96, 0.36);
+}
+
+#board {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.side-panel {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mini-panel {
+  padding: 7px 5px 5px;
+  border-radius: 11px;
+  text-align: center;
+}
+
+.mini-panel canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 3px;
+}
+
+.stats {
+  margin: 0;
+  padding: 8px;
+  border-radius: 11px;
+}
+
+.stats div + div { margin-top: 8px; }
+.stats dt, .stats dd { margin: 0; }
+.stats dd { margin-top: 2px; font-size: 0.94rem; font-weight: 800; }
+
+.gesture-help {
+  min-height: 22px;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(0.58rem, 2.5vw, 0.7rem);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 5, 16, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+.overlay[hidden] { display: none; }
+
+#landscapeOverlay { z-index: 30; }
+
+.overlay-card {
+  width: min(100%, 340px);
+  padding: 28px 22px;
+  border: 1px solid rgba(119, 123, 255, 0.42);
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(27, 31, 74, 0.98), rgba(17, 13, 43, 0.98));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.48), 0 0 36px rgba(98, 76, 224, 0.16);
+  text-align: center;
+}
+
+.overlay-card h2 { margin: 8px 0 12px; }
+.overlay-card p { color: var(--muted); }
+.overlay-card strong { color: var(--ink); }
+.overlay-symbol { margin: 0; color: var(--cyan) !important; font-size: 2.5rem; }
+
+#restartButton {
+  width: 100%;
+  margin-top: 12px;
+  padding: 13px 18px;
+  border: 1px solid rgba(107, 218, 255, 0.58);
+  border-radius: 12px;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  background: linear-gradient(135deg, #315dcf, #7443cc);
+}
+
+@media (orientation: landscape) {
+  .game-shell { visibility: hidden; }
+}

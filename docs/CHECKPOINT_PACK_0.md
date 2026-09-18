@@ -1,0 +1,7 @@
+- projet : Nocturne Shift ;
+- plateforme : mobile uniquement ;
+- orientation : portrait 9:16 ;
+- contrôles : tactiles ;
+- PACK 0 : structure initiale créée ;
+- PACK 1 prévu : socle jouable mobile ;
+- aucun gameplay développé à ce stade.

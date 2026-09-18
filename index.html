@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#090a1d">
+  <title>Nocturne Shift</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="Nocturne Shift">
+    <header class="game-header">
+      <div>
+        <p class="eyebrow">NOCTURNE</p>
+        <h1>SHIFT</h1>
+      </div>
+      <div class="score-panel" aria-live="polite">
+        <span>Score</span>
+        <strong id="score">0</strong>
+      </div>
+    </header>
+
+    <section class="game-layout">
+      <div class="board-wrap" id="touchSurface">
+        <canvas id="board" width="300" height="600" aria-label="Grille de jeu"></canvas>
+      </div>
+      <aside class="side-panel">
+        <section class="mini-panel">
+          <span>Suivante</span>
+          <canvas id="next" width="96" height="96" aria-label="Prochaine pièce"></canvas>
+        </section>
+        <section class="mini-panel">
+          <span>Réserve</span>
+          <canvas id="hold" width="96" height="96" aria-label="Pièce en réserve"></canvas>
+        </section>
+        <dl class="stats">
+          <div><dt>Lignes</dt><dd id="lines">0</dd></div>
+          <div><dt>Record</dt><dd id="best">0</dd></div>
+        </dl>
+      </aside>
+    </section>
+    <p class="gesture-help">Glisser pour déplacer · Tap pour tourner · Bas rapide pour poser · Haut pour réserver</p>
+  </main>
+
+  <section class="overlay" id="landscapeOverlay" aria-live="assertive" hidden>
+    <div class="overlay-card">
+      <p class="overlay-symbol">↻</p>
+      <h2>Mode portrait requis</h2>
+      <p>Remettez le téléphone en portrait pour reprendre la partie.</p>
+    </div>
+  </section>
+
+  <section class="overlay" id="gameOverOverlay" aria-live="assertive" hidden>
+    <div class="overlay-card">
+      <p class="eyebrow">PARTIE TERMINÉE</p>
+      <h2>La nuit se referme</h2>
+      <p>Score final <strong id="finalScore">0</strong></p>
+      <p>Lignes supprimées <strong id="finalLines">0</strong></p>
+      <button id="restartButton" type="button">Rejouer</button>
+    </div>
+  </section>
+
+  <script src="js/game.js"></script>
+</body>
+</html>
