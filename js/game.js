@@ -162,9 +162,23 @@
   // Bounded visual snapshots; line resolution completes once after 420 ms.
   let visualEffects = [];
   const CLEAR_DURATION = 420;
+  const DISCHARGE_DURATION = 200;
   let visualTime = 0;
   let lineResolution = null;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function planDischarges(rows) {
+    const discharges = [];
+    // Snapshot only the fragments on completed rows: targets never propagate.
+    for (const y of rows) {
+      for (let x = 0; x < COLS; x += 1) {
+        if (!grid[y][x]?.unstable) continue;
+        const targetY = y > 0 && grid[y - 1][x] ? y - 1 : y + 1 < ROWS && grid[y + 1][x] ? y + 1 : -1;
+        if (targetY >= 0) discharges.push({ x, y, targetY });
+      }
+    }
+    return discharges;
+  }
 
   function captureVisualEffects() {
     const now = visualTime;
@@ -183,8 +197,9 @@
         fragments.push({ x, y, type: grid[y][x] });
       }
     }
-    visualEffects.push({ at: now, cells, rows: fullRows, fragments, eclipse: eclipseRemaining > 0, combo: fullRows.length ? nextCombo() : 1 });
-    if (fullRows.length) lineResolution = { remaining: CLEAR_DURATION, rows: fullRows };
+    const discharges = planDischarges(fullRows);
+    visualEffects.push({ at: now, cells, rows: fullRows, fragments, discharges, eclipse: eclipseRemaining > 0, combo: fullRows.length ? nextCombo() : 1 });
+    if (fullRows.length) lineResolution = { remaining: CLEAR_DURATION, rows: fullRows, discharges };
   }
 
   function emptyGrid() {
@@ -205,14 +220,23 @@
 
   function takeType() {
     if (!bag.length) refillBag();
-    return bag.pop();
+    const type = bag.pop();
+    return totalLines >= 20 && Math.random() < 0.1 ? { type, unstableIndex: Math.floor(Math.random() * 4) } : type;
   }
 
   function makePiece(type) {
+    const token = type;
+    const unstableIndex = typeof token === "object" ? token.unstableIndex : -1;
+    type = typeof token === "object" ? token.type : token;
     const matrix = cloneShape(type);
+    let index = 0;
+    matrix.forEach(row => row.forEach((value, x) => {
+      if (value && index++ === unstableIndex) row[x] = 2;
+    }));
     const firstFilledRow = matrix.findIndex(row => row.some(Boolean));
     return {
       type,
+      token,
       matrix,
       x: Math.floor((COLS - matrix[0].length) / 2),
       y: -firstFilledRow
@@ -281,7 +305,7 @@
 
   function holdActive() {
     if (!isPlayable() || !canHold) return;
-    const outgoing = active.type;
+    const outgoing = active.token;
     if (heldType) {
       active = makePiece(heldType);
       heldType = outgoing;
@@ -302,7 +326,7 @@
       if (!value) return;
       const boardY = active.y + y;
       if (boardY < 0) aboveTop = true;
-      else grid[boardY][active.x + x] = active.type;
+      else grid[boardY][active.x + x] = value === 2 ? { type: active.type, unstable: true } : active.type;
     }));
     if (aboveTop) {
       endGame();
@@ -407,7 +431,9 @@
     bestNode.textContent = String(bestScore);
   }
 
-  function drawCell(ctx, x, y, size, type, luminous = false, danger = 0) {
+  function drawCell(ctx, x, y, size, type, luminous = false, danger = 0, unstable = false) {
+    unstable = unstable || Boolean(type?.unstable);
+    type = typeof type === "object" ? type.type : type;
     const pad = Math.max(1.4, size * 0.08);
     const left = x * size + pad, top = y * size + pad, width = size - pad * 2;
     ctx.save();
@@ -434,6 +460,19 @@
     ctx.moveTo(left + width * 0.46, top + width * 0.43);
     ctx.lineTo(left + width * 0.24, top + width * 0.38);
     ctx.stroke();
+    if (unstable) {
+      ctx.globalAlpha = reducedMotion.matches ? 0.85 : 0.78 + Math.sin(visualTime / 420) * 0.12;
+      ctx.strokeStyle = "#d697e8";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(left + width * 0.65, top + width * 0.12);
+      ctx.lineTo(left + width * 0.42, top + width * 0.48);
+      ctx.lineTo(left + width * 0.61, top + width * 0.72);
+      ctx.stroke();
+      ctx.fillStyle = "#e9c4f6";
+      const core = Math.max(2, size * 0.13);
+      ctx.fillRect(left + width / 2 - core / 2, top + width / 2 - core / 2, core, core);
+    }
     ctx.restore();
   }
 
@@ -507,7 +546,7 @@
         const targetY = 285 + (fragment.y % 4) * 14;
         const targetX = 156 - (targetY - 280) * 27 / 127;
         boardCtx.globalAlpha = (1 - travel) * intensity;
-        boardCtx.fillStyle = effect.eclipse || effect.combo >= 6 ? "#d0f4ff" : COLORS[fragment.type];
+        boardCtx.fillStyle = effect.eclipse || effect.combo >= 6 ? "#d0f4ff" : COLORS[fragment.type?.type || fragment.type];
         if (reducedMotion.matches) {
           boardCtx.fillRect(startX - 5, startY - 5, 10, 10);
           continue;
@@ -523,6 +562,21 @@
           boardCtx.lineTo(x + radius, y);
           boardCtx.lineTo(x, y + radius);
           boardCtx.closePath(); boardCtx.fill();
+        }
+      }
+      const dischargeAge = now - effect.at - (CLEAR_DURATION - DISCHARGE_DURATION);
+      if (dischargeAge >= 0) {
+        const fade = 1 - dischargeAge / DISCHARGE_DURATION;
+        boardCtx.globalAlpha = Math.max(0, fade) * 0.9;
+        boardCtx.strokeStyle = "#e2b1f3";
+        boardCtx.lineWidth = 1.5;
+        for (const discharge of effect.discharges) {
+          const center = (discharge.x + 0.5) * cell;
+          boardCtx.beginPath();
+          boardCtx.moveTo(center, (discharge.y + 0.5) * cell);
+          boardCtx.lineTo(center, (discharge.targetY + 0.5) * cell);
+          boardCtx.stroke();
+          boardCtx.strokeRect(discharge.x * cell + 3, discharge.targetY * cell + 3, cell - 6, cell - 6);
         }
       }
     }
@@ -574,6 +628,7 @@
     }
     grid.forEach((row, y) => row.forEach((type, x) => {
       if (lineResolution && lineResolution.rows.includes(y) && lineResolution.remaining <= CLEAR_DURATION * 0.7) return;
+      if (lineResolution && lineResolution.remaining <= DISCHARGE_DURATION / 2 && lineResolution.discharges.some(discharge => discharge.x === x && discharge.targetY === y)) return;
       if (type) drawCell(boardCtx, x, y, cell, type, false, y < 7 ? tension * (7 - y) / 7 : 0);
     }));
     drawVisualEffects(cell);
@@ -592,7 +647,7 @@
     boardCtx.restore();
     active.matrix.forEach((row, y) => row.forEach((value, x) => {
       const boardY = active.y + y;
-      if (value && boardY >= 0) drawCell(boardCtx, active.x + x, boardY, cell, active.type, true);
+      if (value && boardY >= 0) drawCell(boardCtx, active.x + x, boardY, cell, active.type, true, 0, value === 2);
     }));
   }
 
@@ -601,7 +656,8 @@
     ctx.fillStyle = "rgba(5,7,20,0.75)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (!type) return;
-    const shape = SHAPES[type];
+    const preview = makePiece(type);
+    const shape = preview.matrix;
     const rows = shape.map((row, index) => row.some(Boolean) ? index : -1).filter(index => index >= 0);
     const cols = shape[0].map((_, x) => shape.some(row => row[x]) ? x : -1).filter(x => x >= 0);
     const size = Math.min(18, 68 / Math.max(rows.length, cols.length));
@@ -611,7 +667,7 @@
       if (!value) return;
       const px = startX / size + (x - cols[0]);
       const py = startY / size + (y - rows[0]);
-      drawCell(ctx, px, py, size, type, true);
+      drawCell(ctx, px, py, size, preview.type, true, 0, value === 2);
     }));
   }
 
@@ -629,6 +685,11 @@
       touch = null;
       lineResolution.remaining = Math.max(0, lineResolution.remaining - elapsed);
       if (lineResolution.remaining === 0) {
+        // Keep full rows intact for the original scoring/clear algorithm.
+        // A target already on a clearing row disappears with that row only.
+        for (const discharge of lineResolution.discharges) {
+          if (!lineResolution.rows.includes(discharge.targetY)) grid[discharge.targetY][discharge.x] = null;
+        }
         lineResolution = null;
         clearLines();
         spawn();
