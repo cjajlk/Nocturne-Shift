@@ -21,8 +21,14 @@
     </header>
 
     <section class="game-layout">
+      <div class="board-column">
       <div class="board-wrap" id="touchSurface">
         <canvas id="board" width="300" height="600" aria-label="Grille de jeu"></canvas>
+      </div>
+      <button id="eclipseButton" class="eclipse-button" type="button" disabled aria-label="Éclipse : charge 0 %">
+        <span class="eclipse-label"><span>ÉCLIPSE</span><span id="eclipseStatus">0 %</span></span>
+        <span class="eclipse-track" aria-hidden="true"><span id="eclipseFill"></span></span>
+      </button>
       </div>
       <aside class="side-panel">
         <section class="mini-panel">

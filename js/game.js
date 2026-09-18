@@ -34,6 +34,94 @@
   const gameOverOverlay = document.getElementById("gameOverOverlay");
   const landscapeOverlay = document.getElementById("landscapeOverlay");
   const restartButton = document.getElementById("restartButton");
+  const eclipseButton = document.getElementById("eclipseButton");
+  const eclipseStatus = document.getElementById("eclipseStatus");
+  const eclipseFill = document.getElementById("eclipseFill");
+  const ECLIPSE_CHARGE = Object.freeze([0, 20, 35, 55, 80]);
+  const ECLIPSE_BASE = 6000;
+  const ECLIPSE_EXTENSION_LIMIT = 4000;
+  const ECLIPSE_RECOVERY = 600;
+  let eclipseCharge = 0;
+  let eclipseRemaining = 0;
+  let eclipseExtension = 0;
+  let eclipseRecovery = 0;
+  let playTime = 0;
+  let lastClearTime = -Infinity;
+  let eclipseUiKey = "";
+
+  function eclipseStrength() {
+    return eclipseRemaining > 0 ? 1 : eclipseRecovery / ECLIPSE_RECOVERY;
+  }
+
+  function eclipseSpeedFactor() {
+    return 1 / (1 - 0.33 * eclipseStrength());
+  }
+
+  function updateEclipseUI() {
+    const running = eclipseRemaining > 0;
+    const ready = !running && eclipseCharge === 100;
+    const label = running ? `${(Math.ceil(eclipseRemaining / 100) / 10).toFixed(1)} s` : ready ? "ACTIVER" : `${eclipseCharge} %`;
+    const state = running ? "active" : ready ? "ready" : "charging";
+    const disabled = !ready || !isPlayable();
+    const fraction = running ? eclipseRemaining / (ECLIPSE_BASE + eclipseExtension) : eclipseCharge / 100;
+    const key = `${label}/${state}/${disabled}`;
+    if (key === eclipseUiKey) return;
+    eclipseUiKey = key;
+    eclipseButton.disabled = disabled;
+    eclipseButton.dataset.state = state;
+    eclipseStatus.textContent = label;
+    eclipseFill.style.transform = `scaleX(${fraction})`;
+    eclipseButton.setAttribute("aria-label", running ? `Éclipse active : ${label}` : ready ? "Activer l’Éclipse" : `Éclipse : charge ${eclipseCharge} %`);
+  }
+
+  function activateEclipse() {
+    if (!isPlayable() || eclipseCharge < 100 || eclipseRemaining > 0) return;
+    const previousFactor = eclipseSpeedFactor();
+    eclipseRemaining = ECLIPSE_BASE;
+    eclipseExtension = 0;
+    eclipseRecovery = 0;
+    // Preserve fractional fall progress; activation never moves a piece.
+    dropAccumulator *= eclipseSpeedFactor() / previousFactor;
+    updateEclipseUI();
+  }
+
+  function advanceEclipse(elapsed) {
+    playTime += elapsed;
+    const previousFactor = eclipseSpeedFactor();
+    if (eclipseRemaining > 0) {
+      const consumed = Math.min(elapsed, eclipseRemaining);
+      eclipseRemaining -= consumed;
+      elapsed -= consumed;
+      if (eclipseRemaining === 0) {
+        eclipseCharge = 0;
+        eclipseRecovery = ECLIPSE_RECOVERY;
+      }
+    }
+    if (eclipseRemaining === 0) eclipseRecovery = Math.max(0, eclipseRecovery - elapsed);
+    dropAccumulator *= eclipseSpeedFactor() / previousFactor;
+  }
+
+  function chargeEclipse(cleared) {
+    if (eclipseRemaining > 0) {
+      const extension = Math.min(cleared * 500, ECLIPSE_EXTENSION_LIMIT - eclipseExtension);
+      eclipseExtension += extension;
+      eclipseRemaining += extension;
+    } else {
+      const bonus = playTime - lastClearTime <= 5000 ? 5 : 0;
+      eclipseCharge = Math.min(100, eclipseCharge + ECLIPSE_CHARGE[cleared] + bonus);
+    }
+    lastClearTime = playTime;
+    updateEclipseUI();
+  }
+
+  function resetEclipse() {
+    eclipseCharge = 0;
+    eclipseRemaining = 0;
+    eclipseExtension = 0;
+    eclipseRecovery = 0;
+    lastClearTime = -Infinity;
+    eclipseUiKey = "";
+  }
 
   let grid;
   let active;
@@ -205,7 +293,8 @@
     }
     if (!cleared) return;
     totalLines += cleared;
-    score += SCORE_TABLE[cleared] || 0;
+    score += (SCORE_TABLE[cleared] || 0) * (eclipseRemaining > 0 ? 1.5 : 1);
+    chargeEclipse(cleared);
     if (score > bestScore) {
       bestScore = score;
       writeBestScore(bestScore);
@@ -215,7 +304,7 @@
 
   function dropInterval() {
     const speedLevel = Math.floor(totalLines / 5);
-    return Math.max(180, 900 - speedLevel * 55);
+    return Math.max(180, 900 - speedLevel * 55) * eclipseSpeedFactor();
   }
 
   function isPlayable() {
@@ -224,6 +313,8 @@
 
   function endGame() {
     gameOver = true;
+    resetEclipse();
+    updateEclipseUI();
     if (score > bestScore) {
       bestScore = score;
       writeBestScore(bestScore);
@@ -235,6 +326,8 @@
   }
 
   function resetGame() {
+    resetEclipse();
+    playTime = 0;
     visualEffects = [];
     grid = emptyGrid();
     score = 0;
@@ -248,6 +341,7 @@
     dropAccumulator = 0;
     spawn();
     updateStats();
+    updateEclipseUI();
   }
 
   function readBestScore() {
@@ -281,7 +375,7 @@
     ctx.fillRect(left, top, width, width);
     ctx.strokeStyle = COLORS[type];
     ctx.lineWidth = luminous ? 1.4 : 1;
-    ctx.globalAlpha = luminous ? 0.95 : 0.62;
+    ctx.globalAlpha = Math.min(1, (luminous ? 0.95 : 0.62) + eclipseStrength() * 0.16);
     ctx.strokeRect(left, top, width, width);
     ctx.globalAlpha = luminous ? 0.22 : 0.10;
     ctx.fillStyle = COLORS[type];
@@ -362,6 +456,23 @@
     const cell = boardCanvas.width / COLS;
     boardCtx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
     boardCtx.drawImage(backdrop, 0, 0);
+    const energy = eclipseStrength();
+    if (energy > 0) {
+      const pulse = reducedMotion.matches ? 1 : 0.85 + Math.sin(playTime / 650) * 0.15;
+      boardCtx.fillStyle = `rgba(2,5,15,${energy * 0.12})`;
+      boardCtx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+      boardCtx.beginPath();
+      boardCtx.moveTo(166, 100); boardCtx.lineTo(139, 237);
+      boardCtx.lineTo(157, 280); boardCtx.lineTo(130, 407);
+      boardCtx.lineTo(144, 504); boardCtx.lineTo(171, 351);
+      boardCtx.lineTo(159, 302); boardCtx.lineTo(176, 207);
+      boardCtx.closePath();
+      boardCtx.fillStyle = `rgba(107,82,181,${energy * pulse * 0.18})`;
+      boardCtx.fill();
+      boardCtx.strokeStyle = `rgba(166,230,244,${energy * pulse * 0.65})`;
+      boardCtx.lineWidth = 1.2;
+      boardCtx.stroke();
+    }
     boardCtx.strokeStyle = "rgba(104,124,214,0.065)";
     boardCtx.lineWidth = 1;
     for (let x = 0; x <= COLS; x += 1) {
@@ -432,9 +543,11 @@
   }
 
   function frame(now) {
-    const delta = Math.min(now - lastFrame, 100);
+    const elapsed = Math.max(0, now - lastFrame);
+    const delta = Math.min(elapsed, 100);
     lastFrame = now;
     if (isPlayable()) {
+      advanceEclipse(elapsed);
       dropAccumulator += delta;
       if (dropAccumulator >= dropInterval()) {
         dropAccumulator = 0;
@@ -442,6 +555,7 @@
       }
     }
     drawBoard();
+    updateEclipseUI();
     requestAnimationFrame(frame);
   }
 
@@ -512,6 +626,7 @@
   touchSurface.addEventListener("touchend", onTouchEnd, { passive: false });
   touchSurface.addEventListener("touchcancel", () => { touch = null; }, { passive: true });
   restartButton.addEventListener("click", resetGame);
+  eclipseButton.addEventListener("click", activateEclipse);
   window.addEventListener("resize", checkOrientation);
   window.addEventListener("orientationchange", checkOrientation);
   document.addEventListener("visibilitychange", () => {
