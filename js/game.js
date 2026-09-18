@@ -137,12 +137,15 @@
   let dropAccumulator = 0;
   let bag = [];
   let touch = null;
-  // Cosmetic snapshots only: never delay locking, clearing or spawning.
+  // Bounded visual snapshots; line resolution completes once after 420 ms.
   let visualEffects = [];
+  const CLEAR_DURATION = 420;
+  let visualTime = 0;
+  let lineResolution = null;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   function captureVisualEffects() {
-    const now = performance.now();
+    const now = visualTime;
     const fullRows = grid.map((row, y) => row.every(Boolean) ? y : -1).filter(y => y >= 0);
     const cells = [];
     active.matrix.forEach((row, y) => row.forEach((value, x) => {
@@ -151,8 +154,15 @@
         cells.push({ x: active.x + x, y: boardY + fullRows.filter(line => line > boardY).length });
       }
     }));
-    visualEffects = visualEffects.filter(effect => now - effect.at < 280).slice(-7);
-    visualEffects.push({ at: now, cells, rows: fullRows });
+    visualEffects = visualEffects.filter(effect => now - effect.at < CLEAR_DURATION).slice(-3);
+    const fragments = [];
+    for (const y of fullRows) {
+      for (let x = 0; x < COLS; x += 1) {
+        fragments.push({ x, y, type: grid[y][x] });
+      }
+    }
+    visualEffects.push({ at: now, cells, rows: fullRows, fragments, eclipse: eclipseRemaining > 0 });
+    if (fullRows.length) lineResolution = { remaining: CLEAR_DURATION, rows: fullRows };
   }
 
   function emptyGrid() {
@@ -277,6 +287,7 @@
       return;
     }
     captureVisualEffects();
+    if (lineResolution) return;
     clearLines();
     spawn();
   }
@@ -308,11 +319,13 @@
   }
 
   function isPlayable() {
-    return !gameOver && !landscapeSuspended && !document.hidden;
+    return !gameOver && !landscapeSuspended && !document.hidden && !lineResolution;
   }
 
   function endGame() {
     gameOver = true;
+    lineResolution = null;
+    visualEffects = [];
     resetEclipse();
     updateEclipseUI();
     if (score > bestScore) {
@@ -326,6 +339,8 @@
   }
 
   function resetGame() {
+    lineResolution = null;
+    visualTime = 0;
     resetEclipse();
     playTime = 0;
     visualEffects = [];
@@ -421,24 +436,33 @@
   backdropCtx.strokeStyle = "rgba(105,207,225,0.15)"; backdropCtx.stroke();
 
   function drawVisualEffects(cell) {
-    const now = performance.now();
-    const duration = reducedMotion.matches ? 100 : 280;
-    visualEffects = visualEffects.filter(effect => now - effect.at < duration);
+    const now = visualTime;
+    visualEffects = visualEffects.filter(effect => now - effect.at < (effect.rows.length ? CLEAR_DURATION : 280));
     boardCtx.save();
     for (const effect of visualEffects) {
-      const progress = (now - effect.at) / duration;
+      const progress = (now - effect.at) / CLEAR_DURATION;
+      const intensity = 0.4 + effect.rows.length * 0.12 + (effect.eclipse ? 0.1 : 0);
       boardCtx.strokeStyle = "#c4f3ff";
       boardCtx.lineWidth = 1.5;
-      boardCtx.globalAlpha = Math.max(0, 1 - progress * 1.6) * 0.8;
-      for (const point of effect.cells) {
-        boardCtx.strokeRect(point.x * cell + 2, point.y * cell + 2, cell - 4, cell - 4);
+      if (!effect.rows.length) {
+        boardCtx.globalAlpha = Math.max(0, 1 - (now - effect.at) / 175) * 0.8;
+        for (const point of effect.cells) {
+          boardCtx.strokeRect(point.x * cell + 2, point.y * cell + 2, cell - 4, cell - 4);
+        }
+        continue;
       }
+      // The same central fissure receives all energy; no real cells move here.
+      boardCtx.globalAlpha = Math.sin(progress * Math.PI) * intensity * 0.65;
+      boardCtx.beginPath();
+      boardCtx.moveTo(166, 100); boardCtx.lineTo(139, 237);
+      boardCtx.lineTo(157, 280); boardCtx.lineTo(130, 407); boardCtx.lineTo(144, 504);
+      boardCtx.stroke();
       for (const y of effect.rows) {
-        boardCtx.globalAlpha = (1 - progress) * 0.38;
+        boardCtx.globalAlpha = Math.max(0, 1 - progress / 0.4) * intensity * 0.5;
         boardCtx.fillStyle = "#a7dceb";
         boardCtx.fillRect(0, y * cell + 2, boardCanvas.width, cell - 4);
-        if (progress > 0.2) {
-          boardCtx.globalAlpha = (1 - progress) * 0.8;
+        if (progress > 0.12 && progress < 0.5) {
+          boardCtx.globalAlpha = (1 - progress) * intensity;
           boardCtx.beginPath();
           for (let x = 0; x < COLS; x += 1) {
             boardCtx.moveTo(x * cell + 2, y * cell + cell * 0.3);
@@ -446,6 +470,33 @@
             boardCtx.lineTo(x * cell + cell * 0.8, y * cell + cell * 0.4);
           }
           boardCtx.stroke();
+        }
+      }
+      const travel = Math.max(0, Math.min(1, (progress - 0.3) / 0.65));
+      const eased = travel * travel;
+      for (const fragment of effect.fragments) {
+        if (progress < 0.3) continue;
+        const startX = (fragment.x + 0.5) * cell;
+        const startY = (fragment.y + 0.5) * cell;
+        const targetY = 285 + (fragment.y % 4) * 14;
+        const targetX = 156 - (targetY - 280) * 27 / 127;
+        boardCtx.globalAlpha = (1 - travel) * intensity;
+        boardCtx.fillStyle = effect.eclipse ? "#d0f4ff" : COLORS[fragment.type];
+        if (reducedMotion.matches) {
+          boardCtx.fillRect(startX - 5, startY - 5, 10, 10);
+          continue;
+        }
+        // Two shards per cell, at most 80 for a four-line clear.
+        for (let shard = 0; shard < 2; shard += 1) {
+          const direction = shard ? 1 : -1;
+          const x = startX + (targetX - startX) * eased + direction * Math.sin(travel * Math.PI) * 9;
+          const y = startY + (targetY - startY) * eased + direction * 4 * (1 - travel);
+          const radius = (shard ? 4 : 6) * (1 - travel) + 0.5;
+          boardCtx.beginPath();
+          boardCtx.moveTo(x - radius, y - radius * 0.5);
+          boardCtx.lineTo(x + radius, y);
+          boardCtx.lineTo(x, y + radius);
+          boardCtx.closePath(); boardCtx.fill();
         }
       }
     }
@@ -496,10 +547,11 @@
       boardCtx.strokeRect(1, 1, boardCanvas.width - 2, cell * 7);
     }
     grid.forEach((row, y) => row.forEach((type, x) => {
+      if (lineResolution && lineResolution.rows.includes(y) && lineResolution.remaining <= CLEAR_DURATION * 0.7) return;
       if (type) drawCell(boardCtx, x, y, cell, type, false, y < 7 ? tension * (7 - y) / 7 : 0);
     }));
     drawVisualEffects(cell);
-    if (!active || gameOver) return;
+    if (!active || gameOver || lineResolution) return;
     let ghostOffset = 0;
     while (!collides(active, 0, ghostOffset + 1)) ghostOffset += 1;
     boardCtx.save();
@@ -546,7 +598,16 @@
     const elapsed = Math.max(0, now - lastFrame);
     const delta = Math.min(elapsed, 100);
     lastFrame = now;
-    if (isPlayable()) {
+    if (!gameOver && !landscapeSuspended && !document.hidden) visualTime += elapsed;
+    if (lineResolution && !gameOver && !landscapeSuspended && !document.hidden) {
+      touch = null;
+      lineResolution.remaining = Math.max(0, lineResolution.remaining - elapsed);
+      if (lineResolution.remaining === 0) {
+        lineResolution = null;
+        clearLines();
+        spawn();
+      }
+    } else if (isPlayable()) {
       advanceEclipse(elapsed);
       dropAccumulator += delta;
       if (dropAccumulator >= dropInterval()) {
