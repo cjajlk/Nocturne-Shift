@@ -168,6 +168,15 @@ h1 {
 .stats dt, .stats dd { margin: 0; }
 .stats dd { margin-top: 2px; font-size: 0.94rem; font-weight: 800; }
 
+.combo {
+  margin: 0; padding: 8px 3px; border-top: 1px solid #596991;
+  color: #93cedf; font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.04em; text-align: center;
+}
+.combo[hidden] { display: none; }
+.combo[data-level="medium"] { border-color: #9888d9; color: #b4dced; }
+.combo[data-level="high"] { border-color: #b8e8f5; color: #e2f8ff; }
+
 .gesture-help {
   min-height: 22px;
   margin: 0;

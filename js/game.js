@@ -46,7 +46,31 @@
   let eclipseExtension = 0;
   let eclipseRecovery = 0;
   let playTime = 0;
-  let lastClearTime = -Infinity;
+  const COMBO_WINDOW = 4000;
+  const combo = { multiplier: 1, expiresAt: 0 };
+  const comboNode = document.getElementById("combo");
+
+  function nextCombo() {
+    return playTime < combo.expiresAt ? Math.min(8, combo.multiplier + 1) : 1;
+  }
+
+  function updateComboUI() {
+    comboNode.hidden = combo.multiplier <= 1;
+    comboNode.textContent = combo.multiplier > 1 ? `COMBO ×${combo.multiplier}` : "";
+    comboNode.dataset.level = combo.multiplier >= 6 ? "high" : combo.multiplier >= 4 ? "medium" : "low";
+  }
+
+  function resetCombo() {
+    combo.multiplier = 1;
+    combo.expiresAt = 0;
+    updateComboUI();
+  }
+
+  function registerCombo() {
+    combo.multiplier = nextCombo();
+    combo.expiresAt = playTime + COMBO_WINDOW;
+    updateComboUI();
+  }
   let eclipseUiKey = "";
 
   function eclipseStrength() {
@@ -107,10 +131,9 @@
       eclipseExtension += extension;
       eclipseRemaining += extension;
     } else {
-      const bonus = playTime - lastClearTime <= 5000 ? 5 : 0;
+      const bonus = Math.min(10, (combo.multiplier - 1) * 2);
       eclipseCharge = Math.min(100, eclipseCharge + ECLIPSE_CHARGE[cleared] + bonus);
     }
-    lastClearTime = playTime;
     updateEclipseUI();
   }
 
@@ -119,7 +142,6 @@
     eclipseRemaining = 0;
     eclipseExtension = 0;
     eclipseRecovery = 0;
-    lastClearTime = -Infinity;
     eclipseUiKey = "";
   }
 
@@ -161,7 +183,7 @@
         fragments.push({ x, y, type: grid[y][x] });
       }
     }
-    visualEffects.push({ at: now, cells, rows: fullRows, fragments, eclipse: eclipseRemaining > 0 });
+    visualEffects.push({ at: now, cells, rows: fullRows, fragments, eclipse: eclipseRemaining > 0, combo: fullRows.length ? nextCombo() : 1 });
     if (fullRows.length) lineResolution = { remaining: CLEAR_DURATION, rows: fullRows };
   }
 
@@ -304,7 +326,8 @@
     }
     if (!cleared) return;
     totalLines += cleared;
-    score += (SCORE_TABLE[cleared] || 0) * (eclipseRemaining > 0 ? 1.5 : 1);
+    registerCombo();
+    score += (SCORE_TABLE[cleared] || 0) * combo.multiplier * (eclipseRemaining > 0 ? 1.5 : 1);
     chargeEclipse(cleared);
     if (score > bestScore) {
       bestScore = score;
@@ -324,6 +347,7 @@
 
   function endGame() {
     gameOver = true;
+    resetCombo();
     lineResolution = null;
     visualEffects = [];
     resetEclipse();
@@ -339,6 +363,7 @@
   }
 
   function resetGame() {
+    resetCombo();
     lineResolution = null;
     visualTime = 0;
     resetEclipse();
@@ -441,7 +466,8 @@
     boardCtx.save();
     for (const effect of visualEffects) {
       const progress = (now - effect.at) / CLEAR_DURATION;
-      const intensity = 0.4 + effect.rows.length * 0.12 + (effect.eclipse ? 0.1 : 0);
+      const comboAccent = Math.min(0.12, (effect.combo - 1) * 0.02);
+      const intensity = Math.min(1, 0.4 + effect.rows.length * 0.12 + (effect.eclipse ? 0.1 : 0) + comboAccent);
       boardCtx.strokeStyle = "#c4f3ff";
       boardCtx.lineWidth = 1.5;
       if (!effect.rows.length) {
@@ -481,7 +507,7 @@
         const targetY = 285 + (fragment.y % 4) * 14;
         const targetX = 156 - (targetY - 280) * 27 / 127;
         boardCtx.globalAlpha = (1 - travel) * intensity;
-        boardCtx.fillStyle = effect.eclipse ? "#d0f4ff" : COLORS[fragment.type];
+        boardCtx.fillStyle = effect.eclipse || effect.combo >= 6 ? "#d0f4ff" : COLORS[fragment.type];
         if (reducedMotion.matches) {
           boardCtx.fillRect(startX - 5, startY - 5, 10, 10);
           continue;
@@ -609,6 +635,7 @@
       }
     } else if (isPlayable()) {
       advanceEclipse(elapsed);
+      if (combo.expiresAt > 0 && playTime >= combo.expiresAt) resetCombo();
       dropAccumulator += delta;
       if (dropAccumulator >= dropInterval()) {
         dropAccumulator = 0;
