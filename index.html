@@ -8,7 +8,44 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <main class="game-shell" aria-label="Nocturne Shift">
+  <section class="app-screen home-screen" data-screen="menu" aria-label="Menu principal">
+    <header><p class="eyebrow">NOCTURNE</p><h1>SHIFT</h1><p class="screen-intro">Au cœur de la faille.</p></header>
+    <nav class="menu-actions" aria-label="Navigation principale">
+      <button id="playButton" class="menu-button primary" type="button">JOUER</button>
+      <button class="menu-button" type="button" data-open="modes">MODES</button>
+      <button class="menu-button" type="button" data-open="profile">PROFIL</button>
+      <button class="menu-button" type="button" data-open="settings">PARAMÈTRES</button>
+    </nav>
+    <p class="screen-intro">Mode Infini · Portrait · Tactile</p>
+  </section>
+  <section class="app-screen" data-screen="modes" hidden aria-label="Modes">
+    <header><p class="eyebrow">NOCTURNE SHIFT</p><h2>Modes</h2></header>
+    <button id="infiniteButton" class="mode-card available" type="button"><strong>MODE INFINI</strong><span>Disponible · Jouer</span></button>
+    <button class="mode-card" type="button" disabled><strong>MODE 2</strong><span>À venir</span></button>
+    <button class="mode-card" type="button" disabled><strong>MODE 3</strong><span>À venir</span></button>
+    <button class="menu-button back-button" type="button" data-open="menu">RETOUR</button>
+  </section>
+  <section class="app-screen" data-screen="profile" hidden aria-label="Profil">
+    <header><p class="eyebrow">SUR CET APPAREIL</p><h2>Profil</h2></header>
+    <dl class="profile-stats">
+      <div><dt>Meilleur score</dt><dd data-stat="bestScore">0</dd></div>
+      <div><dt>Lignes totales supprimées</dt><dd data-stat="totalLines">0</dd></div>
+      <div><dt>Meilleur combo atteint</dt><dd data-stat="bestCombo">0</dd></div>
+      <div><dt>Éclipses déclenchées</dt><dd data-stat="eclipses">0</dd></div>
+      <div><dt>Parties jouées</dt><dd data-stat="games">0</dd></div>
+    </dl>
+    <p id="profileNote" class="screen-intro"></p>
+    <button class="menu-button back-button" type="button" data-open="menu">RETOUR</button>
+  </section>
+  <section class="app-screen" data-screen="settings" hidden aria-label="Paramètres">
+    <header><p class="eyebrow">NOCTURNE SHIFT</p><h2>Paramètres</h2></header>
+    <label class="setting-row"><span>Vibrations</span><input id="vibrationsSetting" type="checkbox" role="switch"><span class="switch-state" aria-hidden="true"></span></label>
+    <p class="screen-intro">Préférence enregistrée. Aucun effet de vibration ajouté à ce stade.</p>
+    <label class="setting-row"><span>Effets visuels réduits</span><input id="reducedSetting" type="checkbox" role="switch"><span class="switch-state" aria-hidden="true"></span></label>
+    <p class="screen-intro">Atténue les effets secondaires. La préférence de réduction des animations du téléphone reste respectée.</p>
+    <button class="menu-button back-button" type="button" data-open="menu">RETOUR</button>
+  </section>
+  <main class="game-shell" data-screen="game" hidden aria-label="Nocturne Shift">
     <header class="game-header">
       <div>
         <p class="eyebrow">NOCTURNE</p>
@@ -64,9 +101,12 @@
       <p>Score final <strong id="finalScore">0</strong></p>
       <p>Lignes supprimées <strong id="finalLines">0</strong></p>
       <button id="restartButton" type="button">Rejouer</button>
+      <button id="mainMenuButton" class="menu-button" type="button">MENU PRINCIPAL</button>
     </div>
   </section>
 
+  <script src="js/profile.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/menu.js"></script>
 </body>
 </html>

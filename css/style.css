@@ -9,6 +9,47 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+.app-screen {
+  width: min(100%, 56.25dvh); height: 100dvh; margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) 22px max(18px, env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; justify-content: center; gap: 14px;
+  overflow-y: auto; touch-action: pan-y; animation: screen-in 180ms ease-out;
+}
+.app-screen header { margin-bottom: 10px; }
+.app-screen header .screen-intro { margin-top: 12px; }
+[data-screen] h1[tabindex="-1"], [data-screen] h2[tabindex="-1"] { outline: none; }
+.home-screen h1 { font-size: clamp(2.8rem, 14vw, 4rem); letter-spacing: 0.16em; margin-top: 8px; }
+.app-screen h2 { margin: 8px 0 0; font-size: 1.7rem; }
+.screen-intro { margin: 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+.menu-actions { display: grid; gap: 12px; }
+.menu-button, .mode-card {
+  width: 100%; min-height: 48px; padding: 13px 15px; border: 1px solid var(--line);
+  border-radius: 8px; background: #10172e; color: var(--ink); font: inherit;
+  font-size: 0.8rem; letter-spacing: 0.08em; touch-action: manipulation;
+}
+.menu-button.primary, .mode-card.available { border-color: #83c8dd; background: linear-gradient(135deg, #203858, #34244d); }
+.menu-button:focus-visible, .mode-card:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.back-button { margin-top: 10px; }
+.mode-card { text-align: left; display: grid; gap: 7px; min-height: 78px; }
+.mode-card span { font-size: 0.72rem; color: var(--muted); letter-spacing: 0; }
+.mode-card:disabled { opacity: 0.5; }
+.profile-stats { margin: 0; border-top: 1px solid var(--line); }
+.profile-stats div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.profile-stats dt { color: var(--muted); font-size: 0.78rem; }
+.profile-stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; color: #c4e9f2; }
+.setting-row { display: flex; align-items: center; gap: 10px; min-height: 52px; font-size: 0.8rem; }
+.setting-row > span:first-child { flex: 1; }
+.setting-row input { width: 24px; height: 24px; accent-color: #8ed7e9; }
+.switch-state { width: 26px; font-size: 0.65rem; color: var(--muted); }
+.switch-state::after { content: "OFF"; }
+input:checked + .switch-state::after { content: "ON"; color: #c4e9f2; }
+#mainMenuButton { margin-top: 10px; }
+@keyframes screen-in { from { opacity: 0; } to { opacity: 1; } }
+.reduced-effects .app-screen { animation: none; }
+@media (prefers-reduced-motion: reduce) { .app-screen { animation: none; } }
+@media (max-height: 600px) { .app-screen { padding-top: 16px; padding-bottom: 16px; gap: 10px; } .profile-stats div { padding: 11px 0; } }
 
 html,
 body {
@@ -228,5 +269,5 @@ h1 {
 }
 
 @media (orientation: landscape) {
-  .game-shell { visibility: hidden; }
+  .game-shell, .app-screen { visibility: hidden; }
 }

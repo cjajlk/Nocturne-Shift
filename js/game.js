@@ -33,7 +33,7 @@
   const finalLinesNode = document.getElementById("finalLines");
   const gameOverOverlay = document.getElementById("gameOverOverlay");
   const landscapeOverlay = document.getElementById("landscapeOverlay");
-  const restartButton = document.getElementById("restartButton");
+  const profile = window.NocturneProfile;
   const eclipseButton = document.getElementById("eclipseButton");
   const eclipseStatus = document.getElementById("eclipseStatus");
   const eclipseFill = document.getElementById("eclipseFill");
@@ -106,6 +106,7 @@
     eclipseRecovery = 0;
     // Preserve fractional fall progress; activation never moves a piece.
     dropAccumulator *= eclipseSpeedFactor() / previousFactor;
+    profile.activateEclipse();
     updateEclipseUI();
   }
 
@@ -145,15 +146,16 @@
     eclipseUiKey = "";
   }
 
-  let grid;
+  let grid = emptyGrid();
   let active;
   let nextType;
   let heldType;
   let canHold;
-  let score;
-  let totalLines;
+  let score = 0;
+  let totalLines = 0;
   let bestScore = readBestScore();
-  let gameOver;
+  let gameOver = true;
+  let sceneActive = false;
   let landscapeSuspended = false;
   let lastFrame = performance.now();
   let dropAccumulator = 0;
@@ -166,6 +168,7 @@
   let visualTime = 0;
   let lineResolution = null;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function reduceEffects() { return reducedMotion.matches || profile.reducedEffects(); }
 
   function planDischarges(rows) {
     const discharges = [];
@@ -353,6 +356,7 @@
     registerCombo();
     score += (SCORE_TABLE[cleared] || 0) * combo.multiplier * (eclipseRemaining > 0 ? 1.5 : 1);
     chargeEclipse(cleared);
+    profile.clearLines(cleared, score, combo.multiplier);
     if (score > bestScore) {
       bestScore = score;
       writeBestScore(bestScore);
@@ -366,7 +370,7 @@
   }
 
   function isPlayable() {
-    return !gameOver && !landscapeSuspended && !document.hidden && !lineResolution;
+    return sceneActive && !gameOver && !landscapeSuspended && !document.hidden && !lineResolution;
   }
 
   function endGame() {
@@ -387,6 +391,7 @@
   }
 
   function resetGame() {
+    profile.startGame();
     resetCombo();
     lineResolution = null;
     visualTime = 0;
@@ -409,20 +414,11 @@
   }
 
   function readBestScore() {
-    try {
-      const value = Number.parseInt(localStorage.getItem("nocturneShiftBestScore"), 10);
-      return Number.isFinite(value) && value > 0 ? value : 0;
-    } catch (_) {
-      return 0;
-    }
+    return profile.stats().bestScore;
   }
 
   function writeBestScore(value) {
-    try {
-      localStorage.setItem("nocturneShiftBestScore", String(value));
-    } catch (_) {
-      // Le jeu reste jouable si le stockage local est indisponible.
-    }
+    profile.bestScore(value);
   }
 
   function updateStats() {
@@ -461,7 +457,7 @@
     ctx.lineTo(left + width * 0.24, top + width * 0.38);
     ctx.stroke();
     if (unstable) {
-      ctx.globalAlpha = reducedMotion.matches ? 0.85 : 0.78 + Math.sin(visualTime / 420) * 0.12;
+      ctx.globalAlpha = reduceEffects() ? 0.85 : 0.78 + Math.sin(visualTime / 420) * 0.12;
       ctx.strokeStyle = "#d697e8";
       ctx.lineWidth = 1.4;
       ctx.beginPath();
@@ -506,7 +502,7 @@
     for (const effect of visualEffects) {
       const progress = (now - effect.at) / CLEAR_DURATION;
       const comboAccent = Math.min(0.12, (effect.combo - 1) * 0.02);
-      const intensity = Math.min(1, 0.4 + effect.rows.length * 0.12 + (effect.eclipse ? 0.1 : 0) + comboAccent);
+      const intensity = Math.min(1, 0.4 + effect.rows.length * 0.12 + (effect.eclipse ? 0.1 : 0) + comboAccent) * (reduceEffects() ? 0.75 : 1);
       boardCtx.strokeStyle = "#c4f3ff";
       boardCtx.lineWidth = 1.5;
       if (!effect.rows.length) {
@@ -547,7 +543,7 @@
         const targetX = 156 - (targetY - 280) * 27 / 127;
         boardCtx.globalAlpha = (1 - travel) * intensity;
         boardCtx.fillStyle = effect.eclipse || effect.combo >= 6 ? "#d0f4ff" : COLORS[fragment.type?.type || fragment.type];
-        if (reducedMotion.matches) {
+        if (reduceEffects()) {
           boardCtx.fillRect(startX - 5, startY - 5, 10, 10);
           continue;
         }
@@ -589,7 +585,7 @@
     boardCtx.drawImage(backdrop, 0, 0);
     const energy = eclipseStrength();
     if (energy > 0) {
-      const pulse = reducedMotion.matches ? 1 : 0.85 + Math.sin(playTime / 650) * 0.15;
+      const pulse = reduceEffects() ? 0.85 : 0.85 + Math.sin(playTime / 650) * 0.15;
       boardCtx.fillStyle = `rgba(2,5,15,${energy * 0.12})`;
       boardCtx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
       boardCtx.beginPath();
@@ -680,8 +676,8 @@
     const elapsed = Math.max(0, now - lastFrame);
     const delta = Math.min(elapsed, 100);
     lastFrame = now;
-    if (!gameOver && !landscapeSuspended && !document.hidden) visualTime += elapsed;
-    if (lineResolution && !gameOver && !landscapeSuspended && !document.hidden) {
+    if (sceneActive && !gameOver && !landscapeSuspended && !document.hidden) visualTime += elapsed;
+    if (sceneActive && lineResolution && !gameOver && !landscapeSuspended && !document.hidden) {
       touch = null;
       lineResolution.remaining = Math.max(0, lineResolution.remaining - elapsed);
       if (lineResolution.remaining === 0) {
@@ -703,7 +699,7 @@
         stepDown();
       }
     }
-    drawBoard();
+    if (sceneActive) drawBoard();
     updateEclipseUI();
     requestAnimationFrame(frame);
   }
@@ -774,7 +770,6 @@
   touchSurface.addEventListener("touchmove", onTouchMove, { passive: false });
   touchSurface.addEventListener("touchend", onTouchEnd, { passive: false });
   touchSurface.addEventListener("touchcancel", () => { touch = null; }, { passive: true });
-  restartButton.addEventListener("click", resetGame);
   eclipseButton.addEventListener("click", activateEclipse);
   window.addEventListener("resize", checkOrientation);
   window.addEventListener("orientationchange", checkOrientation);
@@ -784,6 +779,24 @@
   });
 
   checkOrientation();
-  resetGame();
+  updateStats();
+  window.NocturneGame = Object.freeze({
+    start() {
+      if (landscapeSuspended || document.hidden || (sceneActive && !gameOver)) return false;
+      sceneActive = true;
+      resetGame();
+      return true;
+    },
+    leave() {
+      if (!gameOver) return false;
+      sceneActive = false;
+      lineResolution = null;
+      visualEffects = [];
+      touch = null;
+      dropAccumulator = 0;
+      gameOverOverlay.hidden = true;
+      return true;
+    }
+  });
   requestAnimationFrame(frame);
 })();
