@@ -4,6 +4,24 @@
   const screens = Array.from(document.querySelectorAll("[data-screen]"));
   const vibrations = document.getElementById("vibrationsSetting");
   const reduced = document.getElementById("reducedSetting");
+  const cjBalance = document.getElementById("profileCJ");
+  function refreshCJ() {
+    let value = "—";
+    try {
+      const total = window.CJajlkAccount?.getPlayer?.()?.stats?.totalCJ;
+      if (typeof total === "number" && Number.isFinite(total) && total >= 0) value = `${total} CJ`;
+    } catch (_) { /* The profile remains usable when the central account is unavailable. */ }
+    cjBalance.textContent = value;
+  }
+  function refreshVisibleCJ() {
+    if (screens.some(screen => screen.dataset.screen === "profile" && !screen.hidden)) refreshCJ();
+  }
+  window.addEventListener("nocturne:cj-account-ready", refreshVisibleCJ);
+  window.addEventListener("focus", refreshVisibleCJ);
+  window.addEventListener("storage", event => {
+    if (event.key === "cjPlayerData" || event.key === null) refreshVisibleCJ();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshVisibleCJ(); });
   function refresh() {
     const stats = profile.stats();
     for (const node of document.querySelectorAll("[data-stat]")) {
@@ -17,6 +35,7 @@
   }
   function show(name) {
     refresh();
+    if (name === "profile") refreshCJ();
     for (const screen of screens) screen.hidden = screen.dataset.screen !== name;
     const heading = document.querySelector(`[data-screen="${name}"] h1, [data-screen="${name}"] h2`);
     if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }

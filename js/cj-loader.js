@@ -13,7 +13,10 @@
     engine.async = true;
     document.head.appendChild(engine);
   }
-  account.onload = loadEngine;
+  account.onload = () => {
+    window.dispatchEvent(new Event("nocturne:cj-account-ready"));
+    loadEngine();
+  };
   account.onerror = loadEngine;
   document.head.appendChild(account);
 })();
