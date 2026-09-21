@@ -156,6 +156,35 @@
   let bestScore = readBestScore();
   let gameOver = true;
   let sceneActive = false;
+  let cjFrameTime = null;
+  window.getGameState = () => ({
+    running: sceneActive && !gameOver,
+    // Line resolution remains active play for CJ, even though input awaits spawn.
+    paused: sceneActive && !gameOver && (landscapeSuspended || document.hidden || !document.hasFocus())
+  });
+
+  function suspendCJ() {
+    cjFrameTime = null;
+    try { window.CJEngine?.suspend(); } catch (_) { /* CJ cannot interrupt play. */ }
+  }
+
+  function tickCJ(now) {
+    const state = window.getGameState();
+    if (!state.running || state.paused) {
+      if (cjFrameTime !== null) suspendCJ();
+      return;
+    }
+    const previous = cjFrameTime;
+    cjFrameTime = now;
+    if (previous === null) return;
+    const deltaMs = now - previous;
+    // Reject long gaps instead of clamping or catching up lost time.
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0 || deltaMs > 200) {
+      suspendCJ();
+      return;
+    }
+    try { window.CJEngine?.tick(deltaMs, 'shift'); } catch (_) { suspendCJ(); }
+  }
   let landscapeSuspended = false;
   let lastFrame = performance.now();
   let dropAccumulator = 0;
@@ -370,11 +399,12 @@
   }
 
   function isPlayable() {
-    return sceneActive && !gameOver && !landscapeSuspended && !document.hidden && !lineResolution;
+    return sceneActive && !gameOver && !landscapeSuspended && !document.hidden && document.hasFocus() && !lineResolution;
   }
 
   function endGame() {
     gameOver = true;
+    suspendCJ();
     resetCombo();
     lineResolution = null;
     visualEffects = [];
@@ -391,6 +421,7 @@
   }
 
   function resetGame() {
+    suspendCJ();
     profile.startGame();
     resetCombo();
     lineResolution = null;
@@ -673,11 +704,12 @@
   }
 
   function frame(now) {
+    tickCJ(now);
     const elapsed = Math.max(0, now - lastFrame);
     const delta = Math.min(elapsed, 100);
     lastFrame = now;
-    if (sceneActive && !gameOver && !landscapeSuspended && !document.hidden) visualTime += elapsed;
-    if (sceneActive && lineResolution && !gameOver && !landscapeSuspended && !document.hidden) {
+    if (sceneActive && !gameOver && !landscapeSuspended && !document.hidden && document.hasFocus()) visualTime += elapsed;
+    if (sceneActive && lineResolution && !gameOver && !landscapeSuspended && !document.hidden && document.hasFocus()) {
       touch = null;
       lineResolution.remaining = Math.max(0, lineResolution.remaining - elapsed);
       if (lineResolution.remaining === 0) {
@@ -709,6 +741,7 @@
     if (shouldSuspend !== landscapeSuspended) {
       landscapeSuspended = shouldSuspend;
       landscapeOverlay.hidden = !shouldSuspend;
+      suspendCJ();
       lastFrame = performance.now();
       dropAccumulator = 0;
       touch = null;
@@ -773,16 +806,23 @@
   eclipseButton.addEventListener("click", activateEclipse);
   window.addEventListener("resize", checkOrientation);
   window.addEventListener("orientationchange", checkOrientation);
-  document.addEventListener("visibilitychange", () => {
+  function syncActivityBoundary() {
+    suspendCJ();
     lastFrame = performance.now();
     dropAccumulator = 0;
-  });
+    touch = null;
+  }
+  document.addEventListener("visibilitychange", syncActivityBoundary);
+  window.addEventListener("blur", syncActivityBoundary);
+  window.addEventListener("focus", syncActivityBoundary);
+  window.addEventListener("pagehide", syncActivityBoundary);
+  window.addEventListener("pageshow", syncActivityBoundary);
 
   checkOrientation();
   updateStats();
   window.NocturneGame = Object.freeze({
     start() {
-      if (landscapeSuspended || document.hidden || (sceneActive && !gameOver)) return false;
+      if (landscapeSuspended || document.hidden || !document.hasFocus() || (sceneActive && !gameOver)) return false;
       sceneActive = true;
       resetGame();
       return true;
@@ -790,6 +830,7 @@
     leave() {
       if (!gameOver) return false;
       sceneActive = false;
+      suspendCJ();
       lineResolution = null;
       visualEffects = [];
       touch = null;
