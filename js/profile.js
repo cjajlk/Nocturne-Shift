@@ -12,12 +12,14 @@
   catch (_) { persistent = false; }
   const stats = {
     bestScore: Math.max(number(saved.stats?.bestScore), legacyBest),
+    rushBestScore: number(saved.stats?.rushBestScore),
     totalLines: number(saved.stats?.totalLines),
     bestCombo: Math.min(8, number(saved.stats?.bestCombo)),
     eclipses: number(saved.stats?.eclipses),
     games: number(saved.stats?.games)
   };
   const settings = {
+    selectedMode: saved.settings?.selectedMode === "rush" ? "rush" : "infinite",
     vibrations: typeof saved.settings?.vibrations === "boolean" ? saved.settings.vibrations : false,
     reducedEffects: typeof saved.settings?.reducedEffects === "boolean" ? saved.settings.reducedEffects : false
   };
@@ -31,15 +33,23 @@
     settings: () => ({ ...settings }),
     reducedEffects: () => settings.reducedEffects,
     persistent: () => persistent,
+    selectMode(mode) {
+      if (!["infinite", "rush"].includes(mode)) return;
+      settings.selectedMode = mode; save();
+    },
     startGame() { stats.games += 1; save(); },
     activateEclipse() { stats.eclipses += 1; save(); },
-    clearLines(lines, score, combo) {
+    clearLines(lines, score, combo, mode = "infinite") {
       stats.totalLines += lines;
-      stats.bestScore = Math.max(stats.bestScore, score);
+      const key = mode === "rush" ? "rushBestScore" : "bestScore";
+      stats[key] = Math.max(stats[key], score);
       stats.bestCombo = Math.max(stats.bestCombo, combo);
       save();
     },
-    bestScore(value) { if (value > stats.bestScore) { stats.bestScore = value; save(); } },
+    bestScore(value, mode = "infinite") {
+      const key = mode === "rush" ? "rushBestScore" : "bestScore";
+      if (value > stats[key]) { stats[key] = value; save(); }
+    },
     setting(name, value) {
       if (!Object.hasOwn(settings, name) || typeof value !== "boolean" || settings[name] === value) return;
       settings[name] = value; save();

@@ -35,6 +35,12 @@
 .mode-card { text-align: left; display: grid; gap: 7px; min-height: 78px; }
 .mode-card span { font-size: 0.72rem; color: var(--muted); letter-spacing: 0; }
 .mode-card:disabled { opacity: 0.5; }
+.mode-card[aria-pressed="true"] { border-color: var(--cyan); box-shadow: inset 3px 0 var(--cyan); }
+.mode-card[aria-pressed="true"] strong::after { content: " · SÉLECTIONNÉ"; font-size: 0.6rem; color: var(--cyan); }
+.rush-clock { display: grid; text-align: center; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rush-clock span { color: var(--muted); font-size: 0.6rem; letter-spacing: 0.1em; }
+.rush-clock strong { color: var(--cyan); font-size: 1.25rem; }
+.rush-clock[data-urgent="true"] strong { color: #e1a4de; }
 .profile-stats { margin: 0; border-top: 1px solid var(--line); }
 .profile-stats div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .profile-stats dt { color: var(--muted); font-size: 0.78rem; }

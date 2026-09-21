@@ -153,12 +153,21 @@
   let canHold;
   let score = 0;
   let totalLines = 0;
+  const RUSH_DURATION = 180000;
+  const RUSH_SPEED_FACTOR = 0.85;
+  let mode = "infinite";
+  let rushRemaining = RUSH_DURATION;
+  let rushExpired = false;
+  let rushFrameTime = null;
+  let sessionBestCombo = 1;
+  const rushClock = document.getElementById("rushClock");
+  const rushTime = document.getElementById("rushTime");
   let bestScore = readBestScore();
   let gameOver = true;
   let sceneActive = false;
   let cjFrameTime = null;
   window.getGameState = () => ({
-    running: sceneActive && !gameOver,
+    running: sceneActive && !gameOver && !rushExpired,
     // Line resolution remains active play for CJ, even though input awaits spawn.
     paused: sceneActive && !gameOver && (landscapeSuspended || document.hidden || !document.hasFocus())
   });
@@ -166,6 +175,40 @@
   function suspendCJ() {
     cjFrameTime = null;
     try { window.CJEngine?.suspend(); } catch (_) { /* CJ cannot interrupt play. */ }
+  }
+
+  function formatTime(ms) {
+    const seconds = Math.ceil(ms / 1000);
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+
+  function updateRushUI() {
+    rushClock.hidden = mode !== "rush";
+    rushTime.textContent = formatTime(rushRemaining);
+    rushClock.dataset.urgent = String(rushRemaining <= 10000);
+  }
+
+  function advanceRush(now) {
+    if (mode !== "rush" || !sceneActive || gameOver || rushExpired) return;
+    if (landscapeSuspended || document.hidden || !document.hasFocus()) {
+      rushFrameTime = null;
+      return;
+    }
+    const previous = rushFrameTime;
+    if (previous === null) { rushFrameTime = now; return; }
+    const elapsed = now - previous;
+    if (!Number.isFinite(elapsed) || elapsed < 0) return;
+    rushFrameTime = now;
+    // As with active CJ time, a stalled frame is not caught up on return.
+    if (elapsed > 200) return;
+    rushRemaining = Math.max(0, rushRemaining - elapsed);
+    updateRushUI();
+    if (rushRemaining === 0) {
+      rushExpired = true;
+      touch = null;
+      suspendCJ();
+      if (!lineResolution) endGame();
+    }
   }
 
   function tickCJ(now) {
@@ -183,7 +226,8 @@
       suspendCJ();
       return;
     }
-    try { window.CJEngine?.tick(deltaMs, 'shift'); } catch (_) { suspendCJ(); }
+    const activeDelta = mode === "rush" ? Math.min(deltaMs, rushRemaining) : deltaMs;
+    try { window.CJEngine?.tick(activeDelta, 'shift'); } catch (_) { suspendCJ(); }
   }
   let landscapeSuspended = false;
   let lastFrame = performance.now();
@@ -231,7 +275,12 @@
     }
     const discharges = planDischarges(fullRows);
     visualEffects.push({ at: now, cells, rows: fullRows, fragments, discharges, eclipse: eclipseRemaining > 0, combo: fullRows.length ? nextCombo() : 1 });
-    if (fullRows.length) lineResolution = { remaining: CLEAR_DURATION, rows: fullRows, discharges };
+    if (fullRows.length) {
+      lineResolution = { remaining: CLEAR_DURATION, rows: fullRows, discharges };
+      // Rush credits an already locked line before its visual resolution,
+      // so completing that animation after zero cannot add score.
+      if (mode === "rush") awardLines(fullRows.length);
+    }
   }
 
   function emptyGrid() {
@@ -289,6 +338,7 @@
   }
 
   function spawn(type = nextType) {
+    if (rushExpired) return;
     active = makePiece(type);
     nextType = takeType();
     canHold = true;
@@ -370,7 +420,7 @@
     spawn();
   }
 
-  function clearLines() {
+  function clearLines(alreadyAwarded = false) {
     let cleared = 0;
     for (let y = ROWS - 1; y >= 0; y -= 1) {
       if (grid[y].every(Boolean)) {
@@ -380,12 +430,17 @@
         y += 1;
       }
     }
-    if (!cleared) return;
+    if (!cleared || alreadyAwarded) return;
+    awardLines(cleared);
+  }
+
+  function awardLines(cleared) {
     totalLines += cleared;
     registerCombo();
+    sessionBestCombo = Math.max(sessionBestCombo, combo.multiplier);
     score += (SCORE_TABLE[cleared] || 0) * combo.multiplier * (eclipseRemaining > 0 ? 1.5 : 1);
     chargeEclipse(cleared);
-    profile.clearLines(cleared, score, combo.multiplier);
+    profile.clearLines(cleared, score, combo.multiplier, mode);
     if (score > bestScore) {
       bestScore = score;
       writeBestScore(bestScore);
@@ -395,15 +450,18 @@
 
   function dropInterval() {
     const speedLevel = Math.floor(totalLines / 5);
-    return Math.max(180, 900 - speedLevel * 55) * eclipseSpeedFactor();
+    return Math.max(180, (900 - speedLevel * 55) * (mode === "rush" ? RUSH_SPEED_FACTOR : 1)) * eclipseSpeedFactor();
   }
 
   function isPlayable() {
-    return sceneActive && !gameOver && !landscapeSuspended && !document.hidden && document.hasFocus() && !lineResolution;
+    advanceRush(performance.now());
+    return sceneActive && !gameOver && !rushExpired && !landscapeSuspended && !document.hidden && document.hasFocus() && !lineResolution;
   }
 
   function endGame() {
+    if (gameOver) return;
     gameOver = true;
+    rushFrameTime = null;
     suspendCJ();
     resetCombo();
     lineResolution = null;
@@ -417,11 +475,22 @@
     updateStats();
     finalScoreNode.textContent = String(score);
     finalLinesNode.textContent = String(totalLines);
+    document.getElementById("resultTitle").textContent = mode === "rush" ? "RUSH TERMINÉ" : "La nuit se referme";
+    document.getElementById("rushResults").hidden = mode !== "rush";
+    document.getElementById("finalCombo").textContent = `×${sessionBestCombo}`;
+    document.getElementById("finalTime").textContent = formatTime(RUSH_DURATION - rushRemaining);
+    document.getElementById("rushBest").textContent = String(profile.stats().rushBestScore);
     gameOverOverlay.hidden = false;
   }
 
   function resetGame() {
     suspendCJ();
+    rushRemaining = RUSH_DURATION;
+    rushExpired = false;
+    rushFrameTime = performance.now();
+    sessionBestCombo = 1;
+    bestScore = readBestScore();
+    updateRushUI();
     profile.startGame();
     resetCombo();
     lineResolution = null;
@@ -445,11 +514,11 @@
   }
 
   function readBestScore() {
-    return profile.stats().bestScore;
+    return mode === "rush" ? profile.stats().rushBestScore : profile.stats().bestScore;
   }
 
   function writeBestScore(value) {
-    profile.bestScore(value);
+    profile.bestScore(value, mode);
   }
 
   function updateStats() {
@@ -705,6 +774,7 @@
 
   function frame(now) {
     tickCJ(now);
+    advanceRush(performance.now());
     const elapsed = Math.max(0, now - lastFrame);
     const delta = Math.min(elapsed, 100);
     lastFrame = now;
@@ -719,8 +789,9 @@
           if (!lineResolution.rows.includes(discharge.targetY)) grid[discharge.targetY][discharge.x] = null;
         }
         lineResolution = null;
-        clearLines();
-        spawn();
+        clearLines(mode === "rush");
+        if (rushExpired) endGame();
+        else spawn();
       }
     } else if (isPlayable()) {
       advanceEclipse(elapsed);
@@ -742,6 +813,7 @@
       landscapeSuspended = shouldSuspend;
       landscapeOverlay.hidden = !shouldSuspend;
       suspendCJ();
+      rushFrameTime = null;
       lastFrame = performance.now();
       dropAccumulator = 0;
       touch = null;
@@ -808,6 +880,7 @@
   window.addEventListener("orientationchange", checkOrientation);
   function syncActivityBoundary() {
     suspendCJ();
+    rushFrameTime = null;
     lastFrame = performance.now();
     dropAccumulator = 0;
     touch = null;
@@ -821,15 +894,17 @@
   checkOrientation();
   updateStats();
   window.NocturneGame = Object.freeze({
-    start() {
+    start(selectedMode = mode) {
       if (landscapeSuspended || document.hidden || !document.hasFocus() || (sceneActive && !gameOver)) return false;
       sceneActive = true;
+      mode = selectedMode === "rush" ? "rush" : "infinite";
       resetGame();
       return true;
     },
     leave() {
       if (!gameOver) return false;
       sceneActive = false;
+      rushFrameTime = null;
       suspendCJ();
       lineResolution = null;
       visualEffects = [];

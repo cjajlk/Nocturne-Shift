@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#090a1d">
   <title>Nocturne Shift</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=pack-9">
 </head>
 <body>
   <section class="app-screen home-screen" data-screen="menu" aria-label="Menu principal">
@@ -16,12 +16,13 @@
       <button class="menu-button" type="button" data-open="profile">PROFIL</button>
       <button class="menu-button" type="button" data-open="settings">PARAMÈTRES</button>
     </nav>
-    <p class="screen-intro">Mode Infini · Portrait · Tactile</p>
+    <p id="selectedMode" class="screen-intro" aria-live="polite">Mode Infini · Portrait · Tactile</p>
   </section>
   <section class="app-screen" data-screen="modes" hidden aria-label="Modes">
     <header><p class="eyebrow">NOCTURNE SHIFT</p><h2>Modes</h2></header>
-    <button id="infiniteButton" class="mode-card available" type="button"><strong>MODE INFINI</strong><span>Disponible · Jouer</span></button>
-    <button class="mode-card" type="button" disabled><strong>MODE 2</strong><span>À venir</span></button>
+    <p class="screen-intro">Choisissez votre mode, puis appuyez sur JOUER.</p>
+    <button id="infiniteButton" class="mode-card available" type="button" aria-pressed="true"><strong>MODE INFINI</strong><span>Joue jusqu’au game over.</span></button>
+    <button id="rushButton" class="mode-card available" type="button" aria-pressed="false"><strong>RUSH NOCTURNE</strong><span>3 minutes pour réaliser le meilleur score.</span></button>
     <button class="mode-card" type="button" disabled><strong>MODE 3</strong><span>À venir</span></button>
     <button class="menu-button back-button" type="button" data-open="menu">RETOUR</button>
   </section>
@@ -52,6 +53,7 @@
         <p class="eyebrow">NOCTURNE</p>
         <h1>SHIFT</h1>
       </div>
+      <div id="rushClock" class="rush-clock" hidden><span>RUSH</span><strong id="rushTime" role="timer" aria-label="Temps restant">3:00</strong></div>
       <div class="score-panel" aria-live="polite">
         <span>Score</span>
         <strong id="score">0</strong>
@@ -98,17 +100,22 @@
   <section class="overlay" id="gameOverOverlay" aria-live="assertive" hidden>
     <div class="overlay-card">
       <p class="eyebrow">PARTIE TERMINÉE</p>
-      <h2>La nuit se referme</h2>
+      <h2 id="resultTitle">La nuit se referme</h2>
       <p>Score final <strong id="finalScore">0</strong></p>
       <p>Lignes supprimées <strong id="finalLines">0</strong></p>
+      <div id="rushResults" hidden>
+        <p>Meilleur combo <strong id="finalCombo">×1</strong></p>
+        <p>Temps joué <strong id="finalTime">0:00</strong></p>
+        <p>Record Rush <strong id="rushBest">0</strong></p>
+      </div>
       <button id="restartButton" type="button">Rejouer</button>
       <button id="mainMenuButton" class="menu-button" type="button">MENU PRINCIPAL</button>
     </div>
   </section>
 
-  <script src="js/profile.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/menu.js?v=pack-8.1-readonly-fix"></script>
+  <script src="js/profile.js?v=pack-9"></script>
+  <script src="js/game.js?v=pack-9"></script>
+  <script src="js/menu.js?v=pack-9"></script>
   <script src="js/cj-loader.js"></script>
 </body>
 </html>

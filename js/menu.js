@@ -4,6 +4,12 @@
   const screens = Array.from(document.querySelectorAll("[data-screen]"));
   const vibrations = document.getElementById("vibrationsSetting");
   const reduced = document.getElementById("reducedSetting");
+  let selectedMode = profile.settings().selectedMode === "rush" ? "rush" : "infinite";
+  function refreshMode() {
+    document.getElementById("selectedMode").textContent = selectedMode === "rush" ? "Rush Nocturne · 3 minutes" : "Mode Infini · Portrait · Tactile";
+    document.getElementById("infiniteButton").setAttribute("aria-pressed", String(selectedMode === "infinite"));
+    document.getElementById("rushButton").setAttribute("aria-pressed", String(selectedMode === "rush"));
+  }
   const cjBalance = document.getElementById("profileCJ");
   function refreshCJ() {
     let value = "—";
@@ -25,6 +31,7 @@
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshVisibleCJ(); });
   function refresh() {
+    refreshMode();
     const stats = profile.stats();
     for (const node of document.querySelectorAll("[data-stat]")) {
       node.textContent = node.dataset.stat === "bestCombo" && stats.bestCombo > 0 ? `×${stats.bestCombo}` : String(stats[node.dataset.stat]);
@@ -43,9 +50,15 @@
     if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
   }
   for (const button of document.querySelectorAll("[data-open]")) button.addEventListener("click", () => show(button.dataset.open));
-  function play() { if (window.NocturneGame.start()) show("game"); }
+  function play() { if (window.NocturneGame.start(selectedMode)) show("game"); }
   document.getElementById("playButton").addEventListener("click", play);
-  document.getElementById("infiniteButton").addEventListener("click", play);
+  for (const [id, mode] of [["infiniteButton", "infinite"], ["rushButton", "rush"]]) {
+    document.getElementById(id).addEventListener("click", () => {
+      selectedMode = mode;
+      profile.selectMode(mode);
+      show("menu");
+    });
+  }
   document.getElementById("restartButton").addEventListener("click", play);
   document.getElementById("mainMenuButton").addEventListener("click", () => { if (window.NocturneGame.leave()) show("menu"); });
   vibrations.addEventListener("change", () => { profile.setting("vibrations", vibrations.checked); refresh(); });

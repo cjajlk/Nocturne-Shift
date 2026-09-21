@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 assert.match(html, /<dt>CJ disponibles<\/dt><dd id="profileCJ">—<\/dd>/);
 const nodes = {};
 function node(dataset = {}) {
-  return { dataset, hidden: true, textContent: '', addEventListener(type, fn) { this[type] = fn; } };
+  return { dataset, hidden: true, textContent: '', setAttribute() {}, addEventListener(type, fn) { this[type] = fn; } };
 }
 const screens = ['menu', 'profile', 'game'].map(screen => node({ screen }));
 const buttons = ['profile', 'menu'].map(open => node({ open }));
