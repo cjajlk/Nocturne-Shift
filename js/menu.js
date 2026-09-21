@@ -8,7 +8,9 @@
   function refreshCJ() {
     let value = "—";
     try {
-      const total = window.CJajlkAccount?.getPlayer?.()?.stats?.totalCJ;
+      // Read the shared wallet even when the remote account script has not loaded.
+      const raw = localStorage.getItem("cjPlayerData");
+      const total = raw === null ? undefined : JSON.parse(raw)?.stats?.totalCJ;
       if (typeof total === "number" && Number.isFinite(total) && total >= 0) value = `${total} CJ`;
     } catch (_) { /* The profile remains usable when the central account is unavailable. */ }
     cjBalance.textContent = value;

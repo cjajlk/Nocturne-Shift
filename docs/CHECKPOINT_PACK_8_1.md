@@ -30,3 +30,32 @@ Les deux URL publiées partagent l'origine `https://cjajlk.github.io`, donc le m
 Le parcours réel demandé (noter le solde du hub, comparer le nouveau Profil, gagner un CJ puis comparer à nouveau au hub) n'a pas été exécuté. La modification reste locale, conformément à l'interdiction de commit/push sans demande. Les tests contrôlés ne remplacent pas ce parcours de recette sur la version publiée.
 
 Verdict : **PASS technique local ; validation complète FAIL (parcours hub ↔ Shift avec crédit réel non validé)**. Aucun commit ni push effectué. Aucun fichier temporaire ajouté à la livraison.
+
+## Correctif après retour téléphone (base 257f6a7)
+
+Les sections précédentes décrivent la première livraison. Le correctif présent remplace sa méthode de lecture.
+
+### Diagnostic avant correction
+
+- Dépôt réel `E:\cj_project\Nocturne-Shift`, branche main, HEAD initial `257f6a7f394fad5612c29080daeb66c6a5f1bc79`, état propre.
+- La ligne `profileCJ` est présente dans le HTML local et celui servi par GitHub Pages. Aucun CSS ne masque spécifiquement le solde, y compris zéro ; le masquage paysage concerne tout le jeu.
+- Ancienne lecture exclusivement via `window.CJajlkAccount.getPlayer()`. L'API dépend d'un script distant chargé de façon asynchrone après le menu. En son absence, aucune lecture de la sauvegarde pourtant disponible.
+- Défaut reproduit avant correction par `node tests/profile-cj.cjs` : stockage contenant `stats.totalCJ = 3`, API absente, résultat `—` au lieu de `3 CJ`.
+- Aucun service worker ou cache applicatif trouvé dans les sources Shift. L'HTML public annonce `Cache-Control: max-age=600`. Les URL de scripts n'étaient pas versionnées. Le cache et l'état du téléphone ne sont pas accessibles ici : cette reproduction identifie une cause logicielle certaine, mais ne prouve pas la cause exacte de l'incident sur cet appareil.
+
+### Correction et fichiers
+
+- `js/menu.js` : lecture directe de `localStorage.getItem("cjPlayerData")`, JSON.parse et récupération de `stats.totalCJ`, dans try/catch. Nombre fini non négatif requis. Ni migration, ni valeur par défaut à zéro, ni écriture. L'API distante n'est plus nécessaire à cet affichage.
+- `index.html` : URL du menu versionnée `js/menu.js?v=pack-8.1-readonly-fix` pour distinguer le script corrigé dans le cache une fois l'HTML actualisé. Cela ne force pas le rechargement d'une ancienne page déjà ouverte.
+- `tests/profile-cj.cjs` : test de régression conservé, exécutable avec Node, stockage exclusivement en mémoire.
+- `docs/CHECKPOINT_PACK_8_1.md` : présent complément.
+
+### Résultats
+
+- PASS : 0 → `0 CJ`, 3 → `3 CJ`, 25 → `25 CJ`.
+- PASS : donnée absente, JSON invalide, structure incomplète, chaîne à la place du nombre, nombre négatif/non fini, accès au stockage refusé → `—`.
+- PASS : API distante absente ou défaillante ; réouverture après session simulée avec changement 3 → 4 ; cinq statistiques conservées ; zéro écriture/suppression. Le changement de solde est une fixture, pas un crédit gagné.
+- PASS : navigateur en portrait 390 × 844, HTML/CSS et menu réels avec une sauvegarde de test à 3 en mémoire et sans chargeur distant : `CJ disponibles / 3 CJ` visible. Style calculé `display:block`, `visibility:visible`, ligne entre y=278 et y=299. Aucun portefeuille réel modifié.
+- PASS : syntaxe JavaScript et contrôle du diff. Moteur CJ, CJEngine, règle 600 s, chargeur CJ, gameplay, hub et audio inchangés. Aucune nouvelle clé de stockage, aucune dépense, aucune boucle ajoutée.
+
+Verdict du correctif : **PASS technique**. Vérification sur le téléphone concerné restant à faire après publication. Aucun commit/push pour ce correctif.
