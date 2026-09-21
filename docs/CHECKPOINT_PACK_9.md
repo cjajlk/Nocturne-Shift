@@ -68,6 +68,7 @@ Audio inchangé, aucun son intégré. SHA-256 : `8566C1F40F3F36DC422802510054BCF
 - `node tests/profile-cj.cjs` : PASS, soldes 0/3/25 et lecture seule conservés.
 - Syntaxe JavaScript et `git diff --check` : PASS.
 - Navigateur local 390 × 844 : Modes et choix Rush, JOUER, chrono initial 3:00 puis décroissance, capture visuelle avec chrono lisible sans recouvrir la grille : PASS. Passage paysage à 2:40, temps conservé pendant la suspension, retour portrait à 2:40 : PASS.
+- Navigateur : top-out naturel avant zéro, résultat Rush lisible avec ses statistiques et boutons ; Rejouer repart à 3:00 ; sélection Rush conservée après rechargement ; sélection Infini puis JOUER sans chrono : PASS.
 
 Les tests accélérés ne constituent pas une session de recette sur le téléphone de l'utilisateur. Aucun déploiement effectué. ZIP complet contenant index, CSS, JavaScript, assets, documentation et tests, sans `.git`, anciennes archives ou fichiers de travail.
 
